@@ -19,13 +19,21 @@ package org.apache.giraph.metrics;
 
 import java.util.concurrent.TimeUnit;
 
+import org.apache.giraph.partition.PartitionStore;
+
 /**
  * Description for Timers used in Giraph
  */
 public enum TimerDesc {
 
   /** Timer around Vertex#compute() */
-  COMPUTE_ONE("compute-one", TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
+  COMPUTE_ONE("compute-one", TimeUnit.MILLISECONDS, TimeUnit.SECONDS),
+  /** Timer around disk read */
+  TIMER_IO_READ(PartitionStore.TIMER_IO_READ_TIME, TimeUnit.MICROSECONDS,
+      TimeUnit.SECONDS),
+  /** Timer around disk read */
+  TIMER_IO_WRITE(PartitionStore.TIMER_IO_WRITE_TIME, TimeUnit.MICROSECONDS,
+      TimeUnit.SECONDS);
 
   /** Name of timer */
   private final String name;

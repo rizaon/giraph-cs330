@@ -98,15 +98,15 @@ public abstract class PartitionStore<I extends WritableComparable,
    */
   public abstract int getNumPartitions();
 
-  public long getIoReadTime() {
-    return 0;
-  }
-
-  public long getIoWriteTime() {
-    return 0;
-  }
-
-  public void resetIOTime() { }
+//  public long getIoReadTime() {
+//    return 0;
+//  }
+//
+//  public long getIoWriteTime() {
+//    return 0;
+//  }
+//
+//  public void resetIOTime() { }
 
   /**
    * Whether the partition store is empty.

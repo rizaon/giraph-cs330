@@ -107,8 +107,8 @@ public class AggregatedMetrics {
     printAggregatedMetric(out, "network communication time", "ms", commTime);
     printAggregatedMetric(out, "time to first message", "us", timeToFirstMsg);
     printAggregatedMetric(out, "wait requests time", "us", waitRequestsMicros);
-    printAggregatedMetric(out, "i/o read time", "ms", ioReadTime);
-    printAggregatedMetric(out, "i/o write time", "ms", ioWriteTime);
+    printAggregatedMetric(out, "i/o read time", "us", ioReadTime);
+    printAggregatedMetric(out, "i/o write time", "us", ioWriteTime);
 
     return this;
   }

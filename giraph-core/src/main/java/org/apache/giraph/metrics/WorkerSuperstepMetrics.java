@@ -67,6 +67,8 @@ public class WorkerSuperstepMetrics implements Writable {
     // Note this one is not backed by a GiraphTimer, but rather a real Timer
     userComputeTime = new LongAndTimeUnit();
     userComputeTime.setTimeUnit(TimeUnit.MILLISECONDS);
+    ioReadTimer.setTimeUnit(TimeUnit.MICROSECONDS);
+    ioWriteTimer.setTimeUnit(TimeUnit.MICROSECONDS);
   }
 
   /**
@@ -82,8 +84,8 @@ public class WorkerSuperstepMetrics implements Writable {
     readGiraphTimer(GraphTaskManager.TIMER_SUPERSTEP_TIME, superstepTimer);
     readGiraphTimer(BspServiceWorker.TIMER_WAIT_REQUESTS, waitRequestsTimer);
     userComputeTime.setValue((long) ssm.getTimer(TimerDesc.COMPUTE_ONE).sum());
-    readGiraphTimer(PartitionStore.TIMER_IO_READ_TIME, ioReadTimer);
-    readGiraphTimer(PartitionStore.TIMER_IO_WRITE_TIME, ioWriteTimer);
+    ioReadTimer.setValue((long) ssm.getTimer(TimerDesc.TIMER_IO_READ).sum());
+    ioWriteTimer.setValue((long) ssm.getTimer(TimerDesc.TIMER_IO_WRITE).sum());
     return this;
   }
 
