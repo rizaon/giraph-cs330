@@ -19,6 +19,7 @@
 package org.apache.giraph.metrics;
 
 import org.apache.giraph.graph.GraphTaskManager;
+import org.apache.giraph.partition.PartitionStore;
 import org.apache.giraph.worker.BspServiceWorker;
 
 import com.google.common.collect.Maps;
@@ -74,6 +75,10 @@ public class AggregatedMetrics {
         workerMetrics.getWaitRequestsTimer(), hostname);
     add(USER_COMPUTE_MS,
         workerMetrics.getUserComputeTime(), hostname);
+    add(PartitionStore.TIMER_IO_READ_TIME,
+        workerMetrics.getIoReadTimer(), hostname);
+    add(PartitionStore.TIMER_IO_WRITE_TIME,
+        workerMetrics.getIoWriteTimer(), hostname);
     return this;
   }
 
@@ -92,6 +97,8 @@ public class AggregatedMetrics {
     AggregatedMetric waitRequestsMicros = get(
         BspServiceWorker.TIMER_WAIT_REQUESTS);
     AggregatedMetric userComputeTime = get(USER_COMPUTE_MS);
+    AggregatedMetric ioReadTime = get(PartitionStore.TIMER_IO_READ_TIME);
+    AggregatedMetric ioWriteTime = get(PartitionStore.TIMER_IO_WRITE_TIME);
 
     out.println();
     out.println("--- METRICS: superstep " + superstep + " ---");
@@ -100,6 +107,8 @@ public class AggregatedMetrics {
     printAggregatedMetric(out, "network communication time", "ms", commTime);
     printAggregatedMetric(out, "time to first message", "us", timeToFirstMsg);
     printAggregatedMetric(out, "wait requests time", "us", waitRequestsMicros);
+    printAggregatedMetric(out, "i/o read time", "ms", ioReadTime);
+    printAggregatedMetric(out, "i/o write time", "ms", ioWriteTime);
 
     return this;
   }

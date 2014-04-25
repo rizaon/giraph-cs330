@@ -35,6 +35,7 @@ import org.apache.giraph.metrics.ResetSuperstepMetricsObserver;
 import org.apache.giraph.metrics.SuperstepMetricsRegistry;
 import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.partition.PartitionStats;
+import org.apache.giraph.partition.PartitionStore;
 import org.apache.giraph.time.SystemTime;
 import org.apache.giraph.time.Time;
 import org.apache.giraph.utils.CallableFactory;
@@ -150,6 +151,10 @@ public class GraphTaskManager<I extends WritableComparable, V extends Writable,
   private GiraphTimerContext communicationTimerContext;
   /** Timer for WorkerContext#preSuperstep() */
   private GiraphTimer wcPreSuperstepTimer;
+  /** Time spent in I/O read for Out-of-core graphs */
+  private GiraphTimer ioReadTimer;
+  /** Time spent in I/O write for Out-of-core graphs */
+  private GiraphTimer ioWriteTimer;
   /** Zookeeper host:port list */
   private String serverPortList;
   /** The Hadoop Mapper#Context for this job */
@@ -388,8 +393,11 @@ public class GraphTaskManager<I extends WritableComparable, V extends Writable,
       serviceWorker.finishSuperstep(graphState, partitionStatsList);
     superstepTimerContext.stop();
     if (conf.metricsEnabled()) {
+      ioReadTimer.set(serviceWorker.getPartitionStore().getIoReadTime());
+      ioWriteTimer.set(serviceWorker.getPartitionStore().getIoWriteTime());
       GiraphMetrics.get().perSuperstep().printSummary(System.err);
     }
+    serviceWorker.getPartitionStore().resetIOTime();
     return finishedSuperstepStats;
   }
 
@@ -675,6 +683,10 @@ public class GraphTaskManager<I extends WritableComparable, V extends Writable,
         TIMER_COMMUNICATION_TIME, TimeUnit.MILLISECONDS);
     wcPreSuperstepTimer = new GiraphTimer(superstepMetrics,
         "worker-context-pre-superstep", TimeUnit.MILLISECONDS);
+    ioReadTimer = new GiraphTimer(superstepMetrics,
+        PartitionStore.TIMER_IO_READ_TIME, TimeUnit.MILLISECONDS);
+    ioWriteTimer = new GiraphTimer(superstepMetrics,
+        PartitionStore.TIMER_IO_WRITE_TIME, TimeUnit.MILLISECONDS);
   }
 
   /**

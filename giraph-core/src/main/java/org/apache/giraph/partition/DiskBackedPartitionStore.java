@@ -122,6 +122,10 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
   /** Number of slots used */
   private int inMemoryPartitions;
 
+  // TODO: Need more accurate timing than milliseconds
+  private long ioReadTime = 0l;
+  private long ioWriteTime = 0l;
+
   /**
    * Constructor
    *
@@ -438,6 +442,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private Partition<I, V, E, M> loadPartition(Integer id, int numVertices)
     throws IOException {
+    long start = System.currentTimeMillis();
     Partition<I, V, E, M> partition =
         conf.createPartition(id, context);
     File file = new File(getVerticesPath(id));
@@ -463,6 +468,9 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     if (!conf.isStaticGraph()) {
       file.delete();
     }
+    long total = System.currentTimeMillis() - start;
+    ioReadTime += total;
+    System.err.println("I/O Read time for id " + id + ": " + total);
     return partition;
   }
 
@@ -474,6 +482,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private void offloadPartition(Partition<I, V, E, M> partition)
     throws IOException {
+    long start = System.currentTimeMillis();
     File file = new File(getVerticesPath(partition.getId()));
     file.getParentFile().mkdirs();
     file.createNewFile();
@@ -505,6 +514,9 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
       }
       outputStream.close();
     }
+    long total = System.currentTimeMillis() - start;
+    ioWriteTime += total;
+    System.err.println("I/O Write time for id " + partition.getId() + ": " + total);
   }
 
   /**
@@ -516,6 +528,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private void addToOOCPartition(Partition<I, V, E, M> partition)
     throws IOException {
+    long start = System.currentTimeMillis();
     Integer id = partition.getId();
     Integer count = onDisk.get(id);
     onDisk.put(id, count + (int) partition.getVertexCount());
@@ -533,6 +546,9 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
       writeOutEdges(outputStream, vertex);
     }
     outputStream.close();
+    long total = System.currentTimeMillis() - start;
+    ioWriteTime += total;
+    System.err.println("I/O Write time for id " + id + ": " + total);
   }
 
   /**
@@ -554,7 +570,13 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    * @return The path to the given partition
    */
   private String getPartitionPath(Integer partitionId) {
-    int hash = hasher.hashInt(partitionId).asInt();
+    /* 
+     * Can't use hashInt with Hadoop 2.0.0 - ClassLoader seems to prefer
+     * the older version of Guava dependency that Hadoop uses rather than the
+     * one we package.
+     */
+    // int hash = hasher.hashInt(partitionId).asInt();
+	int hash = hasher.hashLong(Long.valueOf(partitionId).longValue()).asInt();
     int idx  = Math.abs(hash % basePaths.length);
     return basePaths[idx] + "/partition-" + partitionId;
   }
@@ -577,6 +599,24 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private String getEdgesPath(Integer partitionId) {
     return getPartitionPath(partitionId) + "_edges";
+  }
+
+  @Override
+  public long getIoReadTime() {
+    return ioReadTime;
+  }
+
+  @Override
+  public long getIoWriteTime() {
+    return ioWriteTime;
+  }
+
+  @Override
+  public void resetIOTime() {
+    wLock.lock();
+    ioWriteTime = 0l;
+    ioReadTime = 0l;
+    wLock.unlock();
   }
 
   /**
@@ -682,7 +722,9 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
                 "illegal state " + pState + " for partition " + id);
           }
         } finally {
-          wLock.unlock();
+          if (lock.isWriteLockedByCurrentThread()) {
+            wLock.unlock();
+          }
         }
       }
       return partition;
@@ -808,7 +850,9 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
         }
         return null;
       } finally {
-        wLock.unlock();
+        if (lock.isWriteLockedByCurrentThread()) {
+          wLock.unlock();
+        }
       }
     }
   }

@@ -31,6 +31,8 @@ import org.apache.hadoop.io.WritableComparable;
  */
 public abstract class PartitionStore<I extends WritableComparable,
     V extends Writable, E extends Writable, M extends Writable> {
+  public static final String TIMER_IO_READ_TIME = "io-read-time-ms";
+  public static final String TIMER_IO_WRITE_TIME = "io-write-time-ms";
 
   /**
    * Add a new partition to the store or just the vertices from the partition
@@ -95,6 +97,16 @@ public abstract class PartitionStore<I extends WritableComparable,
    * @return The number of partitions
    */
   public abstract int getNumPartitions();
+
+  public long getIoReadTime() {
+    return 0;
+  }
+
+  public long getIoWriteTime() {
+    return 0;
+  }
+
+  public void resetIOTime() { }
 
   /**
    * Whether the partition store is empty.

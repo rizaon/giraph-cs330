@@ -19,6 +19,7 @@
 package org.apache.giraph.metrics;
 
 import org.apache.giraph.graph.GraphTaskManager;
+import org.apache.giraph.partition.PartitionStore;
 import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.hadoop.io.Writable;
 
@@ -46,6 +47,10 @@ public class WorkerSuperstepMetrics implements Writable {
   private LongAndTimeUnit waitRequestsTimer;
   /** Time spent in Vertex#compute */
   private LongAndTimeUnit userComputeTime;
+  /** Time spent in I/O read for Out-of-core graphs */
+  private LongAndTimeUnit ioReadTimer;
+  /** Time spent in I/O write for Out-of-core graphs */
+  private LongAndTimeUnit ioWriteTimer;
 
   /**
    * Constructor
@@ -56,6 +61,8 @@ public class WorkerSuperstepMetrics implements Writable {
     timeToFirstMsg = new LongAndTimeUnit();
     superstepTimer = new LongAndTimeUnit();
     waitRequestsTimer = new LongAndTimeUnit();
+    ioReadTimer = new LongAndTimeUnit();
+    ioWriteTimer = new LongAndTimeUnit();
 
     // Note this one is not backed by a GiraphTimer, but rather a real Timer
     userComputeTime = new LongAndTimeUnit();
@@ -75,6 +82,8 @@ public class WorkerSuperstepMetrics implements Writable {
     readGiraphTimer(GraphTaskManager.TIMER_SUPERSTEP_TIME, superstepTimer);
     readGiraphTimer(BspServiceWorker.TIMER_WAIT_REQUESTS, waitRequestsTimer);
     userComputeTime.setValue((long) ssm.getTimer(TimerDesc.COMPUTE_ONE).sum());
+    readGiraphTimer(PartitionStore.TIMER_IO_READ_TIME, ioReadTimer);
+    readGiraphTimer(PartitionStore.TIMER_IO_WRITE_TIME, ioWriteTimer);
     return this;
   }
 
@@ -112,6 +121,8 @@ public class WorkerSuperstepMetrics implements Writable {
     out.println("  network communication time: " + commTimer);
     out.println("  time to first message: " + timeToFirstMsg);
     out.println("  wait on requests time: " + waitRequestsTimer);
+    out.println("  i/o read time: " + ioReadTimer);
+    out.println("  i/o write time: " + ioWriteTimer);
     return this;
   }
 
@@ -157,6 +168,14 @@ public class WorkerSuperstepMetrics implements Writable {
     return userComputeTime.getValue();
   }
 
+  public long getIoReadTimer() {
+    return ioReadTimer.getValue();
+  }
+
+  public long getIoWriteTimer() {
+    return ioWriteTimer.getValue();
+  }
+
   @Override
   public void readFields(DataInput dataInput) throws IOException {
     commTimer.setValue(dataInput.readLong());
@@ -165,6 +184,8 @@ public class WorkerSuperstepMetrics implements Writable {
     superstepTimer.setValue(dataInput.readLong());
     waitRequestsTimer.setValue(dataInput.readLong());
     userComputeTime.setValue(dataInput.readLong());
+    ioReadTimer.setValue(dataInput.readLong());
+    ioWriteTimer.setValue(dataInput.readLong());
   }
 
   @Override
@@ -175,5 +196,7 @@ public class WorkerSuperstepMetrics implements Writable {
     dataOutput.writeLong(superstepTimer.getValue());
     dataOutput.writeLong(waitRequestsTimer.getValue());
     dataOutput.writeLong(userComputeTime.getValue());
+    dataOutput.writeLong(ioReadTimer.getValue());
+    dataOutput.writeLong(ioWriteTimer.getValue());
   }
 }
