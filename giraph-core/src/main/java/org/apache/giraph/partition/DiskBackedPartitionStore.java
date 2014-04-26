@@ -25,14 +25,15 @@ import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.giraph.metrics.TimerDesc;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
-import org.apache.hadoop.io.BooleanWritable.Comparator;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Mapper.Context;
 import org.apache.log4j.Logger;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.yammer.metrics.core.Timer;
@@ -48,16 +49,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.SoftReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.SortedSet;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -136,11 +133,14 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
 //  private long ioWriteTime = 0l;
 
   /** real memory partition cache */
-  private final Map<Integer, SoftReference<Partition<I, V, E, M>>> cache =
-      Maps.newHashMap();
-  /** cache reference queue */
-  private final ReferenceQueue<Partition<I, V, E, M>> refQueue =
-      new ReferenceQueue<Partition<I, V, E, M>>();
+  private final LoadingCache<Integer, Partition<I, V, E, M>> cache = CacheBuilder
+      .newBuilder().softValues()
+      .build(new CacheLoader<Integer, Partition<I, V, E, M>>() {
+        public Partition<I, V, E, M> load(Integer key) throws IOException {
+          return loadPartition(key, onDisk.remove(key));
+        }
+      });
+
 
   /**
    * Constructor
@@ -464,47 +464,38 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
   private Partition<I, V, E, M> loadPartition(Integer id, int numVertices)
     throws IOException {
     Partition<I, V, E, M> partition;
-    SoftReference<Partition<I, V, E, M>> cacheRef = cache.get(id);
-    partition = cacheRef.get();
-
-    if (partition == null) {
-      // long start = System.currentTimeMillis();
-      Timer readTimer = GiraphMetrics.get().perSuperstep()
-          .getTimer(TimerDesc.TIMER_IO_READ);
-      TimerContext readContext = readTimer.time();
-      System.err.println("Loading partition " + id + " from disk");
-      partition = conf.createPartition(id, context);
-      File file = new File(getVerticesPath(id));
-      DataInputStream inputStream = new DataInputStream(
-          new BufferedInputStream(new FileInputStream(file)));
-      for (int i = 0; i < numVertices; ++i) {
-        Vertex<I, V, E, M> vertex = conf.createVertex();
-        readVertexData(inputStream, vertex);
-        partition.putVertex(vertex);
-      }
-      inputStream.close();
+    // long start = System.currentTimeMillis();
+    Timer readTimer = GiraphMetrics.get().perSuperstep()
+        .getTimer(TimerDesc.TIMER_IO_READ);
+    TimerContext readContext = readTimer.time();
+    System.err.println("Loading partition " + id + " from disk");
+    partition = conf.createPartition(id, context);
+    File file = new File(getVerticesPath(id));
+    DataInputStream inputStream = new DataInputStream(new BufferedInputStream(
+        new FileInputStream(file)));
+    for (int i = 0; i < numVertices; ++i) {
+      Vertex<I, V, E, M> vertex = conf.createVertex();
+      readVertexData(inputStream, vertex);
+      partition.putVertex(vertex);
+    }
+    inputStream.close();
+    file.delete();
+    file = new File(getEdgesPath(id));
+    inputStream = new DataInputStream(new BufferedInputStream(
+        new FileInputStream(file)));
+    for (int i = 0; i < numVertices; ++i) {
+      readOutEdges(inputStream, partition);
+    }
+    inputStream.close();
+    /*
+     * If the graph is static, keep the file around.
+     */
+    if (!conf.isStaticGraph()) {
       file.delete();
-      file = new File(getEdgesPath(id));
-      inputStream = new DataInputStream(new BufferedInputStream(
-          new FileInputStream(file)));
-      for (int i = 0; i < numVertices; ++i) {
-        readOutEdges(inputStream, partition);
-      }
-      inputStream.close();
-      /*
-       * If the graph is static, keep the file around.
-       */
-      if (!conf.isStaticGraph()) {
-        file.delete();
-      }
-
-      cacheRef = new SoftReference<Partition<I, V, E, M>>(partition);
-      readContext.stop();
-    } else {
-      System.err.println("Cache hit for partiton " + id);
     }
     // long total = System.currentTimeMillis() - start;
     // ioReadTime += total;
+    readContext.stop();
     return partition;
   }
 
@@ -568,12 +559,12 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
   private void addToOOCPartition(Partition<I, V, E, M> partition)
     throws IOException {
     // release cache if on-disk files is padded
-    SoftReference<Partition<I, V, E, M>> cacheRef =
-        cache.get(partition.getId());
-    if (cacheRef.get() != null) {
-      cacheRef.enqueue();
+    if (cache.getIfPresent(partition.getId()) != null) {
+      cache.invalidate(partition.getId());
       System.err.println("Partition " + partition.getId() +
-          " is appended and cleared from cache");
+          " is appending and invalidated from cache");
+    } else {
+      System.err.println("Appending partition " + partition.getId());
     }
 
     // long start = System.currentTimeMillis();
@@ -582,7 +573,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     TimerContext writeContext = writeTimer.time();
     Integer id = partition.getId();
     Integer count = onDisk.get(id);
-    System.err.println("Appending partition " + id);
     onDisk.put(id, count + (int) partition.getVertexCount());
     File file = new File(getVerticesPath(id));
     DataOutputStream outputStream = new DataOutputStream(
@@ -705,8 +695,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
       Partition<I, V, E, M> partition = null;
 
       // try to hold cache first, making it strong reference
-      Partition<I, V, E, M> holder = cache.get(id).get();
-      boolean ondisk = false;
 
       while (partition == null) {
         wLock.lock();
@@ -714,10 +702,9 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
           State pState = states.get(id);
           switch (pState) {
           case ONDISK:
-            ondisk = true;
             Entry<Integer, Partition<I, V, E, M>> lru = null;
             states.put(id, State.LOADING);
-            int numVertices = onDisk.remove(id);
+            //int numVertices = onDisk.remove(id);
             /*
              * Wait until we have space in memory or inactive data for a switch
              */
@@ -743,7 +730,8 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
             if (lru != null) {
               offloadPartition(lru.getValue());
             }
-            partition = loadPartition(id, numVertices);
+            // partition = loadPartition(id, numVertices);
+            partition = cache.get(id);
             wLock.lock();
             /*
              * update state and signal the pending threads
@@ -783,10 +771,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
             wLock.unlock();
           }
         }
-      }
-
-      if ((holder != null) && ondisk) {
-        System.err.println("Partition " + id + " was found at cache");
       }
 
       return partition;
@@ -895,8 +879,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
           Condition newC = wLock.newCondition();
           pending.put(id, newC);
           partitionIds.add(id);
-          cache.put(id, new SoftReference<Partition<I, V, E, M>>(partition,
-              refQueue));
+          cache.put(id, partition);
           if (inMemoryPartitions < maxInMemoryPartitions) {
             inMemoryPartitions++;
             states.put(id, State.INACTIVE);
@@ -972,7 +955,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
           }
         }
         partitionIds.remove(id);
-        cache.remove(id);
+        cache.invalidate(id);
         states.remove(id);
         counters.remove(id);
         pending.remove(id).signalAll();
@@ -1082,8 +1065,8 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
       }
       State s1 = states.get(o1);
       State s2 = states.get(o2);
-      boolean cached1 = !cache.get(o1).isEnqueued();
-      boolean cached2 = !cache.get(o2).isEnqueued();
+      boolean cached1 = cache.getIfPresent(o1) != null;
+      boolean cached2 = cache.getIfPresent(o2) != null;
       if (s1 == null) {
         return -1;
       } else if (s2 == null) {
