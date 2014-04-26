@@ -25,6 +25,7 @@ import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.giraph.metrics.TimerDesc;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.BooleanWritable.Comparator;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Mapper.Context;
 import org.apache.log4j.Logger;
@@ -47,12 +48,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -92,7 +95,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private final Lock wLock = lock.writeLock();
   /** The ids of the partitions contained in the store */
-  private final Set<Integer> partitionIds = Sets.newHashSet();
+  private final List<Integer> partitionIds = new ArrayList<Integer>();
   /** Partitions' states store */
   private final Map<Integer, State> states = Maps.newHashMap();
   /** Current active partitions, which have not been put back yet */
@@ -162,6 +165,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
         public Iterable<Integer> call() throws Exception {
           wLock.lock();
           try {
+            Collections.sort(partitionIds, new PartitionComparator());
             return Iterables.unmodifiableIterable(partitionIds);
           } finally {
             wLock.unlock();
@@ -478,7 +482,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     // long total = System.currentTimeMillis() - start;
     // ioReadTime += total;
     readContext.stop();
-    System.err.println("I/O Read time for id " + id + ": " + readTimer.sum());
     return partition;
   }
 
@@ -528,8 +531,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     // long total = System.currentTimeMillis() - start;
     // ioWriteTime += total;
     writeContext.stop();
-    System.err.println("I/O Write time for id " + partition.getId() + ": " +
-      writeTimer.sum());
   }
 
   /**
@@ -565,7 +566,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     // long total = System.currentTimeMillis() - start;
     // ioWriteTime += total;
     writeContext.stop();
-    System.err.println("I/O Write time for id " + id + ": " + writeTimer.sum());
   }
 
   /**
@@ -1001,6 +1001,27 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     public boolean awaitTermination(long timeout, TimeUnit unit)
       throws InterruptedException {
       return shutdown;
+    }
+  }
+
+  /** Comparator for partition Id reordering */
+  private class PartitionComparator implements java.util.Comparator<Integer> {
+
+    @Override
+    public int compare(Integer o1, Integer o2) {
+      // TODO Auto-generated method stub
+      if (o1 == o2) {
+        return 0;
+      }
+      State s1 = states.get(o1);
+      State s2 = states.get(o2);
+      if (s1 == null) {
+        return -1;
+      } else if (s2 == null) {
+        return 1;
+      } else {
+        return s1.compareTo(s2);
+      }
     }
   }
 }
