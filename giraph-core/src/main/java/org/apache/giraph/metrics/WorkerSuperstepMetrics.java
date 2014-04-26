@@ -125,6 +125,7 @@ public class WorkerSuperstepMetrics implements Writable {
     out.println("  wait on requests time: " + waitRequestsTimer);
     out.println("  i/o read time: " + ioReadTimer);
     out.println("  i/o write time: " + ioWriteTimer);
+    out.println();
     return this;
   }
 

@@ -48,6 +48,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.SoftReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -133,6 +135,13 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
 //  private long ioReadTime = 0l;
 //  private long ioWriteTime = 0l;
 
+  /** real memory partition cache */
+  private final Map<Integer, SoftReference<Partition<I, V, E, M>>> cache =
+      Maps.newHashMap();
+  /** cache reference queue */
+  private final ReferenceQueue<Partition<I, V, E, M>> refQueue =
+      new ReferenceQueue<Partition<I, V, E, M>>();
+
   /**
    * Constructor
    *
@@ -165,7 +174,11 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
         public Iterable<Integer> call() throws Exception {
           wLock.lock();
           try {
-            Collections.sort(partitionIds, new PartitionComparator());
+            Collections.sort(partitionIds, new CachePolicy1());
+            for (int id : partitionIds) {
+              System.err.print("(" + id + "," + states.get(id) + ")");
+            }
+            System.err.println();
             return Iterables.unmodifiableIterable(partitionIds);
           } finally {
             wLock.unlock();
@@ -450,38 +463,48 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private Partition<I, V, E, M> loadPartition(Integer id, int numVertices)
     throws IOException {
-    // long start = System.currentTimeMillis();
-    Timer readTimer = GiraphMetrics.get().perSuperstep()
-        .getTimer(TimerDesc.TIMER_IO_READ);
-    TimerContext readContext = readTimer.time();
-    Partition<I, V, E, M> partition =
-        conf.createPartition(id, context);
-    File file = new File(getVerticesPath(id));
-    DataInputStream inputStream = new DataInputStream(
-        new BufferedInputStream(new FileInputStream(file)));
-    for (int i = 0; i < numVertices; ++i) {
-      Vertex<I, V , E, M> vertex = conf.createVertex();
-      readVertexData(inputStream, vertex);
-      partition.putVertex(vertex);
-    }
-    inputStream.close();
-    file.delete();
-    file = new File(getEdgesPath(id));
-    inputStream = new DataInputStream(
-        new BufferedInputStream(new FileInputStream(file)));
-    for (int i = 0; i < numVertices; ++i) {
-      readOutEdges(inputStream, partition);
-    }
-    inputStream.close();
-    /*
-     * If the graph is static, keep the file around.
-     */
-    if (!conf.isStaticGraph()) {
+    Partition<I, V, E, M> partition;
+    SoftReference<Partition<I, V, E, M>> cacheRef = cache.get(id);
+    partition = cacheRef.get();
+
+    if (partition == null) {
+      // long start = System.currentTimeMillis();
+      Timer readTimer = GiraphMetrics.get().perSuperstep()
+          .getTimer(TimerDesc.TIMER_IO_READ);
+      TimerContext readContext = readTimer.time();
+      System.err.println("Loading partition " + id + " from disk");
+      partition = conf.createPartition(id, context);
+      File file = new File(getVerticesPath(id));
+      DataInputStream inputStream = new DataInputStream(
+          new BufferedInputStream(new FileInputStream(file)));
+      for (int i = 0; i < numVertices; ++i) {
+        Vertex<I, V, E, M> vertex = conf.createVertex();
+        readVertexData(inputStream, vertex);
+        partition.putVertex(vertex);
+      }
+      inputStream.close();
       file.delete();
+      file = new File(getEdgesPath(id));
+      inputStream = new DataInputStream(new BufferedInputStream(
+          new FileInputStream(file)));
+      for (int i = 0; i < numVertices; ++i) {
+        readOutEdges(inputStream, partition);
+      }
+      inputStream.close();
+      /*
+       * If the graph is static, keep the file around.
+       */
+      if (!conf.isStaticGraph()) {
+        file.delete();
+      }
+
+      cacheRef = new SoftReference<Partition<I, V, E, M>>(partition);
+      readContext.stop();
+    } else {
+      System.err.println("Cache hit for partiton " + id);
     }
     // long total = System.currentTimeMillis() - start;
     // ioReadTime += total;
-    readContext.stop();
     return partition;
   }
 
@@ -497,6 +520,8 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     Timer writeTimer = GiraphMetrics.get().perSuperstep()
         .getTimer(TimerDesc.TIMER_IO_WRITE);
     TimerContext writeContext = writeTimer.time();
+    System.err.println("Offloading partition " + partition.getId() +
+        " to disk");
     File file = new File(getVerticesPath(partition.getId()));
     file.getParentFile().mkdirs();
     file.createNewFile();
@@ -542,12 +567,22 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private void addToOOCPartition(Partition<I, V, E, M> partition)
     throws IOException {
+    // release cache if on-disk files is padded
+    SoftReference<Partition<I, V, E, M>> cacheRef =
+        cache.get(partition.getId());
+    if (cacheRef.get() != null) {
+      cacheRef.enqueue();
+      System.err.println("Partition " + partition.getId() +
+          " is appended and cleared from cache");
+    }
+
     // long start = System.currentTimeMillis();
     Timer writeTimer = GiraphMetrics.get().perSuperstep()
         .getTimer(TimerDesc.TIMER_IO_WRITE);
     TimerContext writeContext = writeTimer.time();
     Integer id = partition.getId();
     Integer count = onDisk.get(id);
+    System.err.println("Appending partition " + id);
     onDisk.put(id, count + (int) partition.getVertexCount());
     File file = new File(getVerticesPath(id));
     DataOutputStream outputStream = new DataOutputStream(
@@ -669,12 +704,17 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     public Partition<I, V, E, M> call() throws Exception {
       Partition<I, V, E, M> partition = null;
 
+      // try to hold cache first, making it strong reference
+      Partition<I, V, E, M> holder = cache.get(id).get();
+      boolean ondisk = false;
+
       while (partition == null) {
         wLock.lock();
         try {
           State pState = states.get(id);
           switch (pState) {
           case ONDISK:
+            ondisk = true;
             Entry<Integer, Partition<I, V, E, M>> lru = null;
             states.put(id, State.LOADING);
             int numVertices = onDisk.remove(id);
@@ -744,6 +784,11 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
           }
         }
       }
+
+      if ((holder != null) && ondisk) {
+        System.err.println("Partition " + id + " was found at cache");
+      }
+
       return partition;
     }
   }
@@ -850,6 +895,8 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
           Condition newC = wLock.newCondition();
           pending.put(id, newC);
           partitionIds.add(id);
+          cache.put(id, new SoftReference<Partition<I, V, E, M>>(partition,
+              refQueue));
           if (inMemoryPartitions < maxInMemoryPartitions) {
             inMemoryPartitions++;
             states.put(id, State.INACTIVE);
@@ -925,6 +972,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
           }
         }
         partitionIds.remove(id);
+        cache.remove(id);
         states.remove(id);
         counters.remove(id);
         pending.remove(id).signalAll();
@@ -1004,12 +1052,11 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     }
   }
 
-  /** Comparator for partition Id reordering */
-  private class PartitionComparator implements java.util.Comparator<Integer> {
+  /** Strongest first (active -> ondisk) */
+  private class CachePolicy1 implements java.util.Comparator<Integer> {
 
     @Override
     public int compare(Integer o1, Integer o2) {
-      // TODO Auto-generated method stub
       if (o1 == o2) {
         return 0;
       }
@@ -1021,6 +1068,60 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
         return 1;
       } else {
         return s1.compareTo(s2);
+      }
+    }
+  }
+
+  /** cached, then weakest first */
+  private class CachePolicy2 implements java.util.Comparator<Integer> {
+
+    @Override
+    public int compare(Integer o1, Integer o2) {
+      if (o1 == o2) {
+        return 0;
+      }
+      State s1 = states.get(o1);
+      State s2 = states.get(o2);
+      boolean cached1 = !cache.get(o1).isEnqueued();
+      boolean cached2 = !cache.get(o2).isEnqueued();
+      if (s1 == null) {
+        return -1;
+      } else if (s2 == null) {
+        return 1;
+      } else if (cached1) {
+        if (cached2) {
+          // both cached, weakest goes first
+          return s2.compareTo(s1);
+        } else {
+          return 1;
+        }
+      } else {
+        if (cached2) {
+          return -1;
+        } else {
+          // both not cached, strongest goes first
+          return s1.compareTo(s2);
+        }
+      }
+    }
+  }
+
+  /** weakest first (ondisk -> active) */
+  private class CachePolicy3 implements java.util.Comparator<Integer> {
+
+    @Override
+    public int compare(Integer o1, Integer o2) {
+      if (o1 == o2) {
+        return 0;
+      }
+      State s1 = states.get(o1);
+      State s2 = states.get(o2);
+      if (s1 == null) {
+        return -1;
+      } else if (s2 == null) {
+        return 1;
+      } else {
+        return s2.compareTo(s1);
       }
     }
   }
