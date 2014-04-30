@@ -394,7 +394,8 @@ public class GraphTaskManager<I extends WritableComparable, V extends Writable,
     if (conf.metricsEnabled()) {
       //ioReadTimer.set(serviceWorker.getPartitionStore().getIoReadTime());
       //ioWriteTimer.set(serviceWorker.getPartitionStore().getIoWriteTime());
-      GiraphMetrics.get().perSuperstep().printSummary(System.err);
+      GiraphMetrics.get().perSuperstep().printSummary(System.err,
+          conf.getTaskPartition());
     }
     //serviceWorker.getPartitionStore().resetIOTime();
     return finishedSuperstepStats;

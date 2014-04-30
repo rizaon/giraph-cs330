@@ -129,6 +129,43 @@ public class WorkerSuperstepMetrics implements Writable {
   }
 
   /**
+   * Human readable dump of metrics stored here.
+   *
+   * @param superstep long number of superstep.
+   * @param out PrintStream to write to.
+   * @param taskPartition worker id
+   * @return this object, for chaining
+   */
+  public WorkerSuperstepMetrics print(long superstep, PrintStream out,
+      int taskPartition) {
+    out.println();
+    out.println("--- METRICS: superstep " + superstep + " ---");
+    out.print("metric-lab\t");
+    out.print("|worker id|");
+    out.print("superstep|");
+    out.print("superstep time|");
+    out.print("compute all partitions|");
+    out.print("user compute time|");
+    out.print("network communication time|");
+    out.print("time to first message|");
+    out.print("wait on requests time|");
+    out.print("i/o read time|");
+    out.println("i/o write time|");
+    out.print("metric-val\t");
+    out.print(taskPartition + "\t");
+    out.print(superstep + "\t");
+    out.print(superstepTimer.getValue() + "\t");
+    out.print(computeAllTimer.getValue() + "\t");
+    out.print(userComputeTime.getValue() + "\t");
+    out.print(commTimer.getValue() + "\t");
+    out.print(timeToFirstMsg.getValue() + "\t");
+    out.print(waitRequestsTimer.getValue() + "\t");
+    out.print(ioReadTimer.getValue() + "\t");
+    out.println(ioWriteTimer.getValue());
+    return this;
+  }
+
+  /**
    * @return Communication timer
    */
   public long getCommTimer() {

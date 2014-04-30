@@ -29,10 +29,10 @@ public enum TimerDesc {
   /** Timer around Vertex#compute() */
   COMPUTE_ONE("compute-one", TimeUnit.MILLISECONDS, TimeUnit.SECONDS),
   /** Timer around disk read */
-  TIMER_IO_READ(PartitionStore.TIMER_IO_READ_TIME, TimeUnit.MICROSECONDS,
+  TIMER_IO_READ(PartitionStore.TIMER_IO_READ_TIME, TimeUnit.MILLISECONDS,
       TimeUnit.SECONDS),
   /** Timer around disk read */
-  TIMER_IO_WRITE(PartitionStore.TIMER_IO_WRITE_TIME, TimeUnit.MICROSECONDS,
+  TIMER_IO_WRITE(PartitionStore.TIMER_IO_WRITE_TIME, TimeUnit.MILLISECONDS,
       TimeUnit.SECONDS);
 
   /** Name of timer */

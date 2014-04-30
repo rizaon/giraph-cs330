@@ -101,4 +101,15 @@ public class SuperstepMetricsRegistry extends GiraphMetricsRegistry {
   public void printSummary(PrintStream out) {
     new WorkerSuperstepMetrics().readFromRegistry().print(superstep, out);
   }
+
+  /**
+   * Print human readable summary of superstep metrics in single row.
+   *
+   * @param out PrintStream to write to.
+   * @param taskPartition the worker id
+   */
+  public void printSummary(PrintStream out, int taskPartition) {
+    new WorkerSuperstepMetrics().readFromRegistry().print(superstep, out,
+        taskPartition);
+  }
 }

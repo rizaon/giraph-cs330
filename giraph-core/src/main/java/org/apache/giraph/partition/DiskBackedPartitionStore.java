@@ -446,7 +446,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private Partition<I, V, E, M> loadPartition(Integer id, int numVertices)
     throws IOException {
-    // long start = System.currentTimeMillis();
     Timer readTimer = GiraphMetrics.get().perSuperstep()
         .getTimer(TimerDesc.TIMER_IO_READ);
     TimerContext readContext = readTimer.time();
@@ -475,10 +474,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
     if (!conf.isStaticGraph()) {
       file.delete();
     }
-    // long total = System.currentTimeMillis() - start;
-    // ioReadTime += total;
     readContext.stop();
-    System.err.println("I/O Read time for id " + id + ": " + readTimer.sum());
     return partition;
   }
 
@@ -490,7 +486,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private void offloadPartition(Partition<I, V, E, M> partition)
     throws IOException {
-    // long start = System.currentTimeMillis();
     Timer writeTimer = GiraphMetrics.get().perSuperstep()
         .getTimer(TimerDesc.TIMER_IO_WRITE);
     TimerContext writeContext = writeTimer.time();
@@ -525,11 +520,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
       }
       outputStream.close();
     }
-    // long total = System.currentTimeMillis() - start;
-    // ioWriteTime += total;
     writeContext.stop();
-    System.err.println("I/O Write time for id " + partition.getId() + ": " +
-      writeTimer.sum());
   }
 
   /**
@@ -541,7 +532,6 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private void addToOOCPartition(Partition<I, V, E, M> partition)
     throws IOException {
-    // long start = System.currentTimeMillis();
     Timer writeTimer = GiraphMetrics.get().perSuperstep()
         .getTimer(TimerDesc.TIMER_IO_WRITE);
     TimerContext writeContext = writeTimer.time();
@@ -562,10 +552,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
       writeOutEdges(outputStream, vertex);
     }
     outputStream.close();
-    // long total = System.currentTimeMillis() - start;
-    // ioWriteTime += total;
     writeContext.stop();
-    System.err.println("I/O Write time for id " + id + ": " + writeTimer.sum());
   }
 
   /**
