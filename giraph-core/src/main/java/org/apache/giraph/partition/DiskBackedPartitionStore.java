@@ -21,6 +21,8 @@ package org.apache.giraph.partition;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.OutEdges;
 import org.apache.giraph.graph.Vertex;
+import org.apache.giraph.metrics.GiraphMetrics;
+import org.apache.giraph.metrics.TimerDesc;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -32,6 +34,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+import com.yammer.metrics.core.TimerContext;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -453,6 +456,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private Partition<I, V, E> loadPartition(Integer id, int numVertices)
     throws IOException {
+    TimerContext timerContext = GiraphMetrics.get().perSuperstep().getTimer(TimerDesc.READ_TIMER).time();
     Partition<I, V, E> partition =
         conf.createPartition(id, context);
     File file = new File(getVerticesPath(id));
@@ -502,6 +506,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
         LOG.error("loadPartition: Failed to delete file " + file);
       }
     }
+    timerContext.stop();
     return partition;
   }
 
@@ -513,6 +518,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private void offloadPartition(Partition<I, V, E> partition)
     throws IOException {
+    TimerContext timerContext = GiraphMetrics.get().perSuperstep().getTimer(TimerDesc.WRITE_TIMER).time();
     File file = new File(getVerticesPath(partition.getId()));
     if (!file.getParentFile().mkdirs()) {
       LOG.error("offloadPartition: Failed to create directory " + file);
@@ -562,6 +568,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
         }
       }
     }
+    timerContext.stop();
   }
 
   /**
@@ -573,6 +580,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
    */
   private void addToOOCPartition(Partition<I, V, E> partition)
     throws IOException {
+    TimerContext timerContext = GiraphMetrics.get().perSuperstep().getTimer(TimerDesc.WRITE_TIMER).time();
     Integer id = partition.getId();
     Integer count = onDisk.get(id);
     onDisk.put(id, count + (int) partition.getVertexCount());
@@ -602,6 +610,7 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
         outputStream.close();
       }
     }
+    timerContext.stop();
   }
 
   /**

@@ -32,6 +32,8 @@ import java.util.Map;
 public class AggregatedMetrics {
   /** counter for user compute time in milliseconds */
   public static final String USER_COMPUTE_MS = "user-compute-ms";
+  public static final String TIMER_READ_MS = "timer-read-ms";
+  public static final String TIMER_WRITE_MS = "timer-write-ms";
 
   /** Mapping from name to aggregated metric */
   private Map<String, AggregatedMetric> metrics = Maps.newHashMap();
@@ -76,6 +78,10 @@ public class AggregatedMetrics {
         workerMetrics.getWaitRequestsTimer(), hostname);
     add(USER_COMPUTE_MS,
         workerMetrics.getUserComputeTime(), hostname);
+    add(TIMER_READ_MS,
+        workerMetrics.getUserComputeTime(), hostname);
+    add(TIMER_WRITE_MS,
+        workerMetrics.getUserComputeTime(), hostname);
     return this;
   }
 
@@ -95,6 +101,8 @@ public class AggregatedMetrics {
     AggregatedMetric waitRequestsMicros = get(
         BspServiceWorker.TIMER_WAIT_REQUESTS);
     AggregatedMetric userComputeTime = get(USER_COMPUTE_MS);
+    AggregatedMetric readTime = get(TIMER_READ_MS);
+    AggregatedMetric writeTime = get(TIMER_WRITE_MS);
 
     out.println();
     out.println("--- METRICS: superstep " + superstep + " ---");
@@ -104,6 +112,8 @@ public class AggregatedMetrics {
     printAggregatedMetric(out, "network communication time", "ms", commTime);
     printAggregatedMetric(out, "time to first message", "us", timeToFirstMsg);
     printAggregatedMetric(out, "wait requests time", "us", waitRequestsMicros);
+    printAggregatedMetric(out, "disk io read time", "us", readTime);
+    printAggregatedMetric(out, "disk io write time", "us", writeTime);
 
     return this;
   }

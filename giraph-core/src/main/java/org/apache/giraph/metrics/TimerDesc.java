@@ -25,7 +25,9 @@ import java.util.concurrent.TimeUnit;
 public enum TimerDesc {
 
   /** Timer around Vertex#compute() */
-  COMPUTE_ONE("compute-one", TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
+  COMPUTE_ONE("compute-one", TimeUnit.MILLISECONDS, TimeUnit.SECONDS),
+  READ_TIMER("timer-io-read", TimeUnit.MILLISECONDS, TimeUnit.SECONDS),
+  WRITE_TIMER("timer-io-write", TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
 
   /** Name of timer */
   private final String name;

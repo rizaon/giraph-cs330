@@ -46,6 +46,10 @@ public class WorkerSuperstepMetrics implements Writable {
   private LongAndTimeUnit waitRequestsTimer;
   /** Time spent in Vertex#compute */
   private LongAndTimeUnit userComputeTime;
+  /** Time spent in Vertex#compute */
+  private LongAndTimeUnit ioReadTime;
+  /** Time spent in Vertex#compute */
+  private LongAndTimeUnit ioWriteTime;
 
   /**
    * Constructor
@@ -60,6 +64,10 @@ public class WorkerSuperstepMetrics implements Writable {
     // Note this one is not backed by a GiraphTimer, but rather a real Timer
     userComputeTime = new LongAndTimeUnit();
     userComputeTime.setTimeUnit(TimeUnit.MILLISECONDS);
+    ioReadTime = new LongAndTimeUnit();
+    ioReadTime.setTimeUnit(TimeUnit.MILLISECONDS);
+    ioWriteTime = new LongAndTimeUnit();
+    ioWriteTime.setTimeUnit(TimeUnit.MILLISECONDS);
   }
 
   /**
@@ -75,6 +83,8 @@ public class WorkerSuperstepMetrics implements Writable {
     readGiraphTimer(GraphTaskManager.TIMER_SUPERSTEP_TIME, superstepTimer);
     readGiraphTimer(BspServiceWorker.TIMER_WAIT_REQUESTS, waitRequestsTimer);
     userComputeTime.setValue((long) ssm.getTimer(TimerDesc.COMPUTE_ONE).sum());
+    userComputeTime.setValue((long) ssm.getTimer(TimerDesc.READ_TIMER).sum());
+    userComputeTime.setValue((long) ssm.getTimer(TimerDesc.WRITE_TIMER).sum());
     return this;
   }
 
@@ -153,6 +163,20 @@ public class WorkerSuperstepMetrics implements Writable {
   /**
    * @return milliseconds in user compute code
    */
+  public long getIoReadTime() {
+    return ioReadTime.getValue();
+  }
+
+  /**
+   * @return milliseconds in user compute code
+   */
+  public long getIoWriteTime() {
+    return ioWriteTime.getValue();
+  }
+
+  /**
+   * @return milliseconds in user compute code
+   */
   public long getUserComputeTime() {
     return userComputeTime.getValue();
   }
@@ -165,6 +189,8 @@ public class WorkerSuperstepMetrics implements Writable {
     superstepTimer.setValue(dataInput.readLong());
     waitRequestsTimer.setValue(dataInput.readLong());
     userComputeTime.setValue(dataInput.readLong());
+    ioReadTime.setValue(dataInput.readLong());
+    ioWriteTime.setValue(dataInput.readLong());
   }
 
   @Override
@@ -175,5 +201,7 @@ public class WorkerSuperstepMetrics implements Writable {
     dataOutput.writeLong(superstepTimer.getValue());
     dataOutput.writeLong(waitRequestsTimer.getValue());
     dataOutput.writeLong(userComputeTime.getValue());
+    dataOutput.writeLong(ioReadTime.getValue());
+    dataOutput.writeLong(ioWriteTime.getValue());
   }
 }
