@@ -57,9 +57,11 @@ public class ConnectedComponentsVertex extends Vertex<IntWritable,
   @Override
   public void compute(Iterable<IntWritable> messages) throws IOException {
     int currentComponent = getValue().get();
-
     // First superstep is special, because we can simply look at the neighbors
     if (getSuperstep() == 0) {
+      currentComponent = getId().get();
+      setValue(new IntWritable(currentComponent));
+
       for (Edge<IntWritable, NullWritable> edge : getEdges()) {
         int neighbor = edge.getTargetVertexId().get();
         if (neighbor < currentComponent) {
