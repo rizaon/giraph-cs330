@@ -50,7 +50,7 @@ import org.apache.log4j.Logger;
 public class SimplePageRankVertex extends Vertex<LongWritable,
     DoubleWritable, FloatWritable, DoubleWritable> {
   /** Number of supersteps for this test */
-  public static final int MAX_SUPERSTEPS = 30;
+  public static final int MAX_SUPERSTEPS = 3;
   /** Logger */
   private static final Logger LOG =
       Logger.getLogger(SimplePageRankVertex.class);
@@ -74,9 +74,9 @@ public class SimplePageRankVertex extends Vertex<LongWritable,
       aggregate(MAX_AGG, vertexValue);
       aggregate(MIN_AGG, vertexValue);
       aggregate(SUM_AGG, new LongWritable(1));
-      LOG.info(getId() + ": PageRank=" + vertexValue +
-          " max=" + getAggregatedValue(MAX_AGG) +
-          " min=" + getAggregatedValue(MIN_AGG));
+//      LOG.info(getId() + ": PageRank=" + vertexValue +
+//          " max=" + getAggregatedValue(MAX_AGG) +
+//          " min=" + getAggregatedValue(MIN_AGG));
     }
 
     if (getSuperstep() < MAX_SUPERSTEPS) {

@@ -76,7 +76,7 @@ public class DiskBackedMessageStoreByPartition<I extends WritableComparable,
   }
 
   @Override
-  public void addPartitionMessages(
+  public synchronized void addPartitionMessages(
       int partitionId,
       ByteArrayVertexIdMessages<I, M> messages) throws IOException {
     FlushableMessageStore<I, M> flushableMessageStore =
@@ -106,7 +106,7 @@ public class DiskBackedMessageStoreByPartition<I extends WritableComparable,
   }
 
   @Override
-  public void addMessages(MessageStore<I, M> messageStore) throws IOException {
+  public synchronized void addMessages(MessageStore<I, M> messageStore) throws IOException {
     for (I destinationVertex : messageStore.getDestinationVertices()) {
       FlushableMessageStore<I, M> flushableMessageStore =
           getMessageStore(destinationVertex);

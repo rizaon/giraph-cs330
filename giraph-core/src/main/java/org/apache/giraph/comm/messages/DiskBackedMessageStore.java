@@ -21,6 +21,9 @@ package org.apache.giraph.comm.messages;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -33,7 +36,10 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
+import org.apache.giraph.metrics.GiraphMetrics;
+import org.apache.giraph.metrics.TimerDesc;
 import org.apache.giraph.utils.ExtendedDataOutput;
 import org.apache.giraph.utils.RepresentativeByteArrayIterable;
 import org.apache.hadoop.io.Writable;
@@ -299,6 +305,9 @@ public class DiskBackedMessageStore<I extends WritableComparable,
 
   @Override
   public void write(DataOutput out) throws IOException {
+    Timer writeTimer = GiraphMetrics.get().perSuperstep()
+        .getTimer(TimerDesc.TIMER_IO_WRITE);
+    TimerContext writeContext = writeTimer.time();
     // write destination vertices
     out.writeInt(destinationVertices.size());
     for (I vertexId : destinationVertices) {
@@ -321,10 +330,14 @@ public class DiskBackedMessageStore<I extends WritableComparable,
     for (BasicMessageStore<I, M> fileStore : fileStores) {
       fileStore.write(out);
     }
+    writeContext.stop();
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
+    Timer readTimer = GiraphMetrics.get().perSuperstep()
+        .getTimer(TimerDesc.TIMER_IO_READ);
+    TimerContext readContext = readTimer.time();
     // read destination vertices
     int numVertices = in.readInt();
     for (int v = 0; v < numVertices; v++) {
@@ -355,6 +368,7 @@ public class DiskBackedMessageStore<I extends WritableComparable,
       fileStore.readFields(in);
       fileStores.add(fileStore);
     }
+    readContext.stop();
   }
 
 

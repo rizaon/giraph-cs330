@@ -579,8 +579,8 @@ public class DiskBackedPartitionStore<I extends WritableComparable,
      * the older version of Guava dependency that Hadoop uses rather than the
      * one we package.
      */
-    // int hash = hasher.hashInt(partitionId).asInt();
-    int hash = hasher.hashLong(Long.valueOf(partitionId).longValue()).asInt();
+    int hash = hasher.hashInt(partitionId).asInt();
+    // int hash = hasher.hashLong(Long.valueOf(partitionId).longValue()).asInt();
     int idx  = Math.abs(hash % basePaths.length);
     return basePaths[idx] + "/partition-" + partitionId;
   }
