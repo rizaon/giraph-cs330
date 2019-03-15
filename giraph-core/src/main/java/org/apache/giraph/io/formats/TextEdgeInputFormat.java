@@ -196,7 +196,7 @@ public abstract class TextEdgeInputFormat<I extends WritableComparable,
   protected abstract class TextEdgeReaderFromEachLineProcessed<T> extends
       TextEdgeReader {
     /** Generic type holding processed line */
-    private T processedLine;
+    protected T processedLine;
 
     @Override
     public I getCurrentSourceId() throws IOException, InterruptedException {
@@ -220,7 +220,7 @@ public abstract class TextEdgeInputFormat<I extends WritableComparable,
      * @throws IOException on I/O error
      * @throws InterruptedException on interruption
      */
-    private T processCurrentLine() throws IOException, InterruptedException {
+    protected T processCurrentLine() throws IOException, InterruptedException {
       if (processedLine == null) {
         Text line = getRecordReader().getCurrentValue();
         processedLine = preprocessLine(line);
@@ -229,7 +229,7 @@ public abstract class TextEdgeInputFormat<I extends WritableComparable,
     }
 
     @Override
-    public final boolean nextEdge() throws IOException, InterruptedException {
+    public boolean nextEdge() throws IOException, InterruptedException {
       processedLine = null;
       return getRecordReader().nextKeyValue();
     }

@@ -38,7 +38,7 @@ public class SimpleShortestPathsVertex extends
     FloatWritable, DoubleWritable> {
   /** The shortest paths id */
   public static final LongConfOption SOURCE_ID =
-      new LongConfOption("SimpleShortestPathsVertex.sourceId", 1);
+      new LongConfOption("SimpleShortestPathsVertex.sourceId", 101);
   /** Class logger */
   private static final Logger LOG =
       Logger.getLogger(SimpleShortestPathsVertex.class);

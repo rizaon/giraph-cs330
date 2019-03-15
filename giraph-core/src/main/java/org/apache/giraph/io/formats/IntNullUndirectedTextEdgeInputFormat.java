@@ -1,5 +1,4 @@
 /*
-/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -36,7 +35,7 @@ import java.util.regex.Pattern;
  *
  * Each line consists of: source_vertex, target_vertex
  */
-public class IntNullTextEdgeInputFormat extends
+public class IntNullUndirectedTextEdgeInputFormat extends
     TextEdgeInputFormat<IntWritable, NullWritable> {
   /** Splitter for endpoints */
   private static final Pattern SEPARATOR = Pattern.compile("[\t ]");
@@ -44,15 +43,43 @@ public class IntNullTextEdgeInputFormat extends
   @Override
   public EdgeReader<IntWritable, NullWritable> createEdgeReader(
       InputSplit split, TaskAttemptContext context) throws IOException {
-    return new IntNullTextEdgeReader();
+    return new IntNullUndirectedTextEdgeReader();
   }
 
   /**
    * {@link org.apache.giraph.io.EdgeReader} associated with
-   * {@link IntNullUndirectedTextEdgeInputFormat}.
+   * {@link IntNullTextEdgeInputFormat}.
    */
-  public class IntNullTextEdgeReader extends
+  public class IntNullUndirectedTextEdgeReader extends
       TextEdgeReaderFromEachLineProcessed<IntPair> {
+    private boolean flipped = false;
+
+    @Override
+    protected IntPair processCurrentLine() throws IOException, InterruptedException {
+      if (processedLine == null) {
+        Text line = getRecordReader().getCurrentValue();
+        processedLine = preprocessLine(line);
+        flipped = false;
+      }
+      return processedLine;
+    }
+
+    @Override
+    public boolean nextEdge() throws IOException, InterruptedException {
+      if ((processedLine!=null) && (!flipped)){
+        int a = processedLine.getFirst();
+        int b = processedLine.getSecond();
+        processedLine.setFirst(b);
+        processedLine.setSecond(a);
+        flipped = true;
+        return true;
+      } else {
+        processedLine = null;
+        flipped = false;
+        return getRecordReader().nextKeyValue();
+      }
+    }
+
     @Override
     protected IntPair preprocessLine(Text line) throws IOException {
       String[] tokens = SEPARATOR.split(line.toString());
